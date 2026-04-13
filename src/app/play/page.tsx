@@ -1530,6 +1530,10 @@ function PlayPageClient() {
   const [fallbackRecommendations, setFallbackRecommendations] = useState<PlayFallbackRecommendation[]>([]);
   const [hasCompletedSearchRequest, setHasCompletedSearchRequest] = useState(false);
   const [backgroundSourcesLoading, setBackgroundSourcesLoading] = useState(false);
+  const fallbackRecommendationsRowRef = useRef<HTMLDivElement>(null);
+  const fallbackRecommendationsDraggingRef = useRef(false);
+  const fallbackRecommendationsDragStartXRef = useRef(0);
+  const fallbackRecommendationsDragStartScrollLeftRef = useRef(0);
 
   // 优选和测速开关
   const [optimizationEnabled] = useState<boolean>(() => {
@@ -1601,6 +1605,49 @@ function PlayPageClient() {
 
   // 播放器就绪状态（用于触发 usePlaySync 的事件监听器设置）
   const [playerReady, setPlayerReady] = useState(false);
+
+  const handleFallbackRecommendationsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const container = fallbackRecommendationsRowRef.current;
+    if (!container) return;
+
+    if (container.scrollWidth <= container.clientWidth + 1) return;
+
+    const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (delta === 0) return;
+
+    const maxScrollLeft = container.scrollWidth - container.clientWidth;
+    const nextScrollLeft = container.scrollLeft + delta;
+    const willScroll =
+      (delta < 0 && container.scrollLeft > 0) ||
+      (delta > 0 && container.scrollLeft < maxScrollLeft);
+
+    if (!willScroll) return;
+
+    e.preventDefault();
+    container.scrollLeft = Math.max(0, Math.min(maxScrollLeft, nextScrollLeft));
+  };
+
+  const handleFallbackRecommendationsMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const container = fallbackRecommendationsRowRef.current;
+    if (!container || container.scrollWidth <= container.clientWidth) return;
+    if (e.button !== 0) return;
+
+    fallbackRecommendationsDraggingRef.current = true;
+    fallbackRecommendationsDragStartXRef.current = e.clientX;
+    fallbackRecommendationsDragStartScrollLeftRef.current = container.scrollLeft;
+  };
+
+  const handleFallbackRecommendationsMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const container = fallbackRecommendationsRowRef.current;
+    if (!container || !fallbackRecommendationsDraggingRef.current) return;
+
+    const deltaX = e.clientX - fallbackRecommendationsDragStartXRef.current;
+    container.scrollLeft = fallbackRecommendationsDragStartScrollLeftRef.current - deltaX;
+  };
+
+  const stopFallbackRecommendationsDragging = () => {
+    fallbackRecommendationsDraggingRef.current = false;
+  };
 
   // 播放进度保存相关
   const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -8107,7 +8154,15 @@ function PlayPageClient() {
                     也许你想看
                   </h3>
                 </div>
-                <div className='w-full overflow-x-auto overflow-y-hidden pb-1'>
+                <div
+                  ref={fallbackRecommendationsRowRef}
+                  className='w-full overflow-x-auto overflow-y-hidden pb-1 cursor-grab active:cursor-grabbing'
+                  onWheel={handleFallbackRecommendationsWheel}
+                  onMouseDown={handleFallbackRecommendationsMouseDown}
+                  onMouseMove={handleFallbackRecommendationsMouseMove}
+                  onMouseUp={stopFallbackRecommendationsDragging}
+                  onMouseLeave={stopFallbackRecommendationsDragging}
+                >
                   <div className='inline-flex gap-2.5 sm:gap-3'>
                     {fallbackRecommendations.map((recommendation) => (
                       <div
